@@ -9,6 +9,7 @@
 #"""
 
 import re
+import math
 import web
 from decimal import Decimal
 
@@ -29,6 +30,25 @@ subs = [
     ('mbps', '(megabits / second)')
 ]
 
+integers_regex = re.compile(r'\b[\d\.]+\b')
+
+def calc(expr, advanced=False): #Returns the result as a float, advanced=True will enable functionality from the math module, if someone tries to run direct python code such as sys.exit(), this function will simply return None and do nothing
+   def safe_eval(expr, symbols={}):
+       return eval(expr, dict(__builtins__=None), symbols)
+   def whole_number_to_float(match):
+       group = match.group()
+       if group.find('.') == -1:
+           return group + '.0'
+       return group
+   expr = expr.replace('^','**') # Python normally interprets '^' as a bitwise XOR operator while '**' is the exponent operator, this can be safely commented out if users are aware of this
+   expr = integers_regex.sub(whole_number_to_float, expr)
+   if advanced:
+       return safe_eval(expr, vars(math))
+   else:
+       return safe_eval(expr)
+       
+       
+
 def calculate(phenny, input): 
     """Calculate things."""
     if not input.group(2):
@@ -37,29 +57,20 @@ def calculate(phenny, input):
     q = q.replace('\xcf\x95', 'phi') # utf-8 U+03D5
     q = q.replace('\xcf\x80', 'pi') # utf-8 U+03C0
     q = q.replace('÷', '/')
-    q = web.quote(q)
-    uri = 'https://www.calcatraz.com/calculator/api?c=' + q
-    answer = web.get(uri)
-    if answer: 
-        answerindex = 1
-        if (len(answer.split(";")) < 2):
-            answerindex = 0
-        answer = answer.split(";")[answerindex]
-        answer = answer.replace('  ','')
-        #answer = ''.join(chr(ord(c)) for c in answer)
-        #answer = answer.decode('utf-8')
-        #answer = answer.replace('\\x26#215;', '*')
-        #answer = answer.replace('\\x3c', '<')
-        #answer = answer.replace('\\x3e', '>')
-        #answer = answer.replace('<sup>', '^(')
-        #answer = answer.replace('</sup>', ')')
-        #answer = web.decode(answer)
-        if re.compile('answer').match(answer):
-            return phenny.say('Sorry, no result.')
-        else:
-            return phenny.say(answer)
-    else: 
-        return phenny.say('Sorry, no result.')
+    q = q.replace('τ', 'tau') # 2π
+
+    try:
+        answer = str(calc(input.group(2), advanced=True))
+        phenny.say(answer)
+
+    #Placeholder text for possible errors
+    except SyntaxError: #Bad syntax
+        phenny.say("Syntax error")
+    except ZeroDivisionError: #Tried to divide by zero
+        phenny.say("You cannot divide by zero")
+    except OverflowError: #Calculation result is too large
+        phenny.say("The answer is too large")
+
 calculate.commands = ['c','calc','calculate']
 calculate.example = '.c 5 + 3'
 
